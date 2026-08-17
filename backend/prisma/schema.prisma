@@ -1,0 +1,322 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum BankCode {
+  BANK_A
+  BANK_B
+  BANK_C
+}
+
+enum TransactionStatus {
+  INITIATED
+  DEBIT_PENDING
+  DEBIT_SUCCESS
+  CREDIT_PENDING
+  CREDIT_SUCCESS
+  SUCCESS
+  FAILED
+  ROLLBACK_INITIATED
+  ROLLED_BACK
+  RECOVERY_PENDING
+}
+
+enum LedgerEntryType {
+  DEBIT
+  CREDIT
+}
+
+enum RiskLevel {
+  NORMAL
+  SUSPICIOUS
+  HIGH_RISK
+}
+
+enum RetryJobStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  EXHAUSTED
+}
+
+enum AuditAction {
+  TRANSACTION_CREATED
+  STATE_TRANSITION
+  LEDGER_ENTRY_CREATED
+  IDEMPOTENCY_HIT
+  FRAUD_FLAGGED
+  RETRY_QUEUED
+  RETRY_SUCCEEDED
+  RETRY_FAILED
+  ROLLBACK_INITIATED
+  ROLLBACK_COMPLETED
+  BANK_CRASHED
+  BANK_RECOVERED
+  CHAOS_DELAY_ADDED
+  CHAOS_RESET
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BANKS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Bank {
+  id          String   @id @default(uuid())
+  name        String
+  code        BankCode @unique
+  isCrashed   Boolean  @default(false)
+  delayMs     Int      @default(0)
+  failureRate Float    @default(0.05) // 0.0 - 1.0 probability
+
+  accounts Account[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("banks")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// USERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id    String @id @default(uuid())
+  name  String
+  email String @unique
+  upiId String @unique
+  phone String @unique
+
+  accounts Account[]
+
+  sentTransactions     Transaction[] @relation("SenderTransactions")
+  receivedTransactions Transaction[] @relation("ReceiverTransactions")
+
+  fraudReports FraudReport[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ACCOUNTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Account {
+  id            String @id @default(uuid())
+  accountNumber String @unique
+  balance       Float  @default(0)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  bankId String
+  bank   Bank   @relation(fields: [bankId], references: [id])
+
+  sentTransactions     Transaction[] @relation("SenderAccountTransactions")
+  receivedTransactions Transaction[] @relation("ReceiverAccountTransactions")
+
+  ledgerEntries LedgerEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([bankId])
+  @@map("accounts")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRANSACTIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Transaction {
+  id             String            @id @default(uuid())
+  idempotencyKey String            @unique
+  amount         Float
+  status         TransactionStatus @default(INITIATED)
+  fraudScore     Float             @default(0)
+  riskLevel      RiskLevel         @default(NORMAL)
+  retryCount     Int               @default(0)
+  errorMessage   String?
+  metadata       Json?
+
+  senderId String
+  sender   User   @relation("SenderTransactions", fields: [senderId], references: [id])
+
+  receiverId String
+  receiver   User   @relation("ReceiverTransactions", fields: [receiverId], references: [id])
+
+  senderAccountId String
+  senderAccount   Account @relation("SenderAccountTransactions", fields: [senderAccountId], references: [id])
+
+  receiverAccountId String
+  receiverAccount   Account @relation("ReceiverAccountTransactions", fields: [receiverAccountId], references: [id])
+
+  stateHistory    TransactionStateHistory[]
+  ledgerEntries   LedgerEntry[]
+  fraudReports    FraudReport[]
+  retryJobs       RetryJob[]
+  idempotencyKeys IdempotencyKey[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([riskLevel])
+  @@map("transactions")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRANSACTION STATE HISTORY (immutable audit trail)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model TransactionStateHistory {
+  id            String            @id @default(uuid())
+  fromState     TransactionStatus?
+  toState       TransactionStatus
+  reason        String?
+  metadata      Json?
+
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([transactionId])
+  @@index([createdAt])
+  @@map("transaction_state_history")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LEDGER ENTRIES (immutable, append-only)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model LedgerEntry {
+  id            String          @id @default(uuid())
+  type          LedgerEntryType
+  amount        Float
+  balanceBefore Float
+  balanceAfter  Float
+  description   String?
+
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([transactionId])
+  @@index([accountId])
+  @@index([createdAt])
+  @@map("ledger_entries")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// IDEMPOTENCY KEYS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model IdempotencyKey {
+  id               String @id @default(uuid())
+  key              String @unique
+  responseSnapshot Json
+
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([key])
+  @@map("idempotency_keys")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FRAUD REPORTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model FraudReport {
+  id          String    @id @default(uuid())
+  fraudScore  Float
+  riskLevel   RiskLevel
+  rules       Json      // array of triggered rules
+  metadata    Json?
+
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([transactionId])
+  @@index([userId])
+  @@index([riskLevel])
+  @@index([createdAt])
+  @@map("fraud_reports")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RETRY JOBS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model RetryJob {
+  id          String         @id @default(uuid())
+  attempt     Int
+  status      RetryJobStatus @default(PENDING)
+  scheduledAt DateTime
+  executedAt  DateTime?
+  errorMessage String?
+  jobId       String?        // BullMQ job id
+
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([transactionId])
+  @@index([status])
+  @@map("retry_jobs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUDIT LOGS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id       String      @id @default(uuid())
+  entity   String      // e.g. "Transaction", "Bank", "Account"
+  entityId String
+  action   AuditAction
+  metadata Json?
+  actorId  String?     // userId or "system"
+
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

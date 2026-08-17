@@ -1,0 +1,43 @@
+{
+  "name": "paymesh-backend",
+  "version": "1.0.0",
+  "description": "PayMesh - Distributed UPI Switch Simulator Backend",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "db:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "db:generate": "prisma generate",
+    "db:studio": "prisma studio",
+    "db:seed": "node prisma/seed.js",
+    "db:reset": "prisma migrate reset --force && node prisma/seed.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.10.2",
+    "bullmq": "^5.4.0",
+    "compression": "^1.7.4",
+    "cors": "^2.8.5",
+    "dayjs": "^1.11.10",
+    "express": "^4.18.2",
+    "express-async-errors": "^3.1.1",
+    "express-rate-limit": "^7.2.0",
+    "helmet": "^7.1.0",
+    "ioredis": "^5.3.2",
+    "morgan": "^1.10.0",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.0",
+    "uuid": "^9.0.1",
+    "winston": "^3.12.0",
+    "winston-daily-rotate-file": "^5.0.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@faker-js/faker": "^8.4.1",
+    "nodemon": "^3.1.0",
+    "prisma": "^5.10.2"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  }
+}

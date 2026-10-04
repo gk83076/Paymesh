@@ -58,4 +58,15 @@ async function listTransactions(req, res) {
   res.json({ ok: true, data: result });
 }
 
-module.exports = { initiateTransfer, getTransfer, listTransactions };
+/**
+ * POST /api/transfer/:id/rollback
+ */
+async function rollbackTransfer(req, res) {
+  const { id } = req.params;
+  const recoveryService = require("../modules/recovery/recovery.service");
+  await recoveryService.executeRollback(id);
+  const txn = await switchService.getTransaction(id);
+  res.json({ ok: true, data: txn });
+}
+
+module.exports = { initiateTransfer, getTransfer, listTransactions, rollbackTransfer };

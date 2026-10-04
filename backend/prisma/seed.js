@@ -4,7 +4,7 @@
  */
 
 const { PrismaClient } = require("@prisma/client");
-const { faker } = require("@faker-js/faker/locale/en_IN");
+const { faker } = require("@faker-js/faker");
 
 const prisma = new PrismaClient();
 

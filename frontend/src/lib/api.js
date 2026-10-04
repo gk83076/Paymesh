@@ -19,6 +19,7 @@ api.interceptors.response.use(
 // ── Transfer ──────────────────────────────────────────────────────────────────
 export const initiateTransfer = (payload) => api.post('/transfer', payload)
 export const getTransfer = (id) => api.get(`/transfer/${id}`)
+export const rollbackTransfer = (id) => api.post(`/transfer/${id}/rollback`)
 export const listTransactions = (params) => api.get('/transactions', { params })
 
 // ── Accounts ─────────────────────────────────────────────────────────────────

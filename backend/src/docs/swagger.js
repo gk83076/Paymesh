@@ -1,4 +1,5 @@
 const swaggerJsdoc = require("swagger-jsdoc");
+const path = require("path");
 
 const options = {
   definition: {
@@ -46,7 +47,7 @@ On failure: \`→ RECOVERY_PENDING → ... → ROLLBACK_INITIATED → ROLLED_BAC
       { name: "System", description: "Health checks" },
     ],
   },
-  apis: ["./src/routes/*.js"],
+  apis: [path.join(__dirname, "../routes/*.js")],
 };
 
 const swaggerSpec = swaggerJsdoc(options);

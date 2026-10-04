@@ -80,6 +80,7 @@ router.post("/transfer", transferController.initiateTransfer);
  *         description: Transaction not found
  */
 router.get("/transfer/:id", transferController.getTransfer);
+router.post("/transfer/:id/rollback", transferController.rollbackTransfer);
 
 // ─── Transactions ─────────────────────────────────────────────────────────
 /**
